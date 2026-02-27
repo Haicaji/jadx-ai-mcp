@@ -11,6 +11,8 @@ import com.zin.jadxaimcp.server.routes.*; // MCP tool call's request handlers
 
 public class PluginServer {
     private static final Logger logger = LoggerFactory.getLogger(PluginServer.class);
+    // JVM-wide key to store the ServerSocketChannel for cross-classloader shutdown
+    private static final String JVM_SERVER_KEY = "jadx-ai-mcp-server-channel";
     private final MainWindow mainWindow;
     private final int port;
     private Javalin app;
@@ -28,29 +30,25 @@ public class PluginServer {
     }
 
     /**
-     * @return void
-     * 
-     * This method starts the Javalin HTTP server for the MCP plugin.
-     * 1. It creates a Javalin instance with custom configuration:
-     *    - Disables the default Javalin banner
-     * 2. It starts the server on the configured port
-     * 3. It registers all API route handlers via registerRoutes()
-     * 4. It sets the running flag to true
-     * 5. It logs the startup success message with custom banner and server URL
-     * 6. If startup fails, it:
-     *    - Logs the error with exception details
-     *    - Sets running flag to false
-     *    - Re-throws a RuntimeException to notify the plugin
-     * 
-     * This method is called by the plugin initialization mechanism after
-     * JADX has fully loaded the APK content.
+     * Starts the Javalin HTTP server for the MCP plugin.
+     * Before starting, it closes any existing server socket from a previous
+     * classloader to prevent port conflicts.
      */
     public void start() {
         try {
+            // This solves github issue -> #81
+            // Close any existing server socket from a previous classloader
+            // (e.g. after Reset Code Cache)
+            closeExistingServerSocket();
+
             // Configure and start Javalin
             app = Javalin.create(config -> {
                 config.showJavalinBanner = false;
             }).start(port);
+
+            // Extract and store the underlying ServerSocketChannel (JDK class) JVM-wide
+            // so future classloaders can close it even if the old classloader is broken
+            storeServerSocketChannel();
 
             // Register all route handlers
             registerRoutes();
@@ -61,7 +59,7 @@ public class PluginServer {
             logger.info(JadxAIMCPBanner.banner);
             logger.info("// -------------------- JADX AI MCP PLUGIN -------------------- //");
             logger.info("JADX AI MCP Plugin HTTP Server Started at http://127.0.0.1:" + port + "/");
-        
+
         } catch (Exception e) {
             logger.error("JADX-AI-MCP Plugin Error: Could not start HTTP Server. Exception: " + e.getMessage(), e);
             isRunning = false;
@@ -71,23 +69,13 @@ public class PluginServer {
     }
 
     /**
-     * @return void
-     * 
-     * This method performs graceful shutdown of the Javalin server.
-     * 1. It checks if the server instance exists
-     * 2. It calls Javalin's stop() method to close all connections
-     * 3. It logs the successful shutdown
-     * 4. If shutdown fails, it logs the error
-     * 5. In the finally block, it:
-     *    - Nullifies the server instance
-     *    - Sets running flag to false
-     * 
-     * This method is called during plugin restart or JADX shutdown.
+     * Performs graceful shutdown of the Javalin server.
      */
     public void stop() {
         if (app != null) {
             try {
                 app.stop();
+                System.getProperties().remove(JVM_SERVER_KEY);
                 logger.info("JADX-AI-MCP Plugin: HTTP Server Stopped");
             } catch (Exception e) {
                 logger.error("JADX-AI-MCP Plugin Error: Error during shutdown: " + e.getMessage(), e);
@@ -99,10 +87,58 @@ public class PluginServer {
     }
 
     /**
+     * Extracts the underlying ServerSocketChannel from Javalin/Jetty via reflection
+     * and stores it in JVM-wide System properties. This is done at start time when
+     * the classloader is valid. The ServerSocketChannel is a JDK class and can be
+     * closed later without any dependency on the plugin's classloader.
+     *
+     * Reflection chain: Javalin -> jettyServer() -> server() -> getConnectors()[0]
+     * -> getTransport()
+     */
+    private void storeServerSocketChannel() {
+        try {
+            Object jettyServer = app.getClass().getMethod("jettyServer").invoke(app);
+            Object server = jettyServer.getClass().getMethod("server").invoke(jettyServer);
+            Object[] connectors = (Object[]) server.getClass().getMethod("getConnectors").invoke(server);
+            if (connectors != null && connectors.length > 0) {
+                Object transport = connectors[0].getClass().getMethod("getTransport").invoke(connectors[0]);
+                if (transport instanceof java.nio.channels.ServerSocketChannel) {
+                    System.getProperties().put(JVM_SERVER_KEY, transport);
+                    logger.debug("JADX-AI-MCP Plugin: Stored ServerSocketChannel for cross-classloader cleanup");
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("JADX-AI-MCP Plugin: Could not store server socket channel: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Closes any existing ServerSocketChannel stored by a previous plugin instance.
+     * This directly releases the port at the OS level without needing to call any
+     * methods on the broken old classloader's Javalin/Jetty objects.
+     */
+    private void closeExistingServerSocket() {
+        Object stored = System.getProperties().get(JVM_SERVER_KEY);
+        if (stored instanceof java.nio.channels.ServerSocketChannel) {
+            try {
+                java.nio.channels.ServerSocketChannel channel = (java.nio.channels.ServerSocketChannel) stored;
+                if (channel.isOpen()) {
+                    logger.info("JADX-AI-MCP Plugin: Closing existing server socket from previous classloader...");
+                    channel.close();
+                    // Wait for the OS to fully release the port
+                    Thread.sleep(1000);
+                    logger.info("JADX-AI-MCP Plugin: Previous server socket closed, port released.");
+                }
+            } catch (Exception e) {
+                logger.warn("JADX-AI-MCP Plugin: Error closing old server socket: " + e.getMessage());
+            } finally {
+                System.getProperties().remove(JVM_SERVER_KEY);
+            }
+        }
+    }
+
+    /**
      * @return boolean True if server is running, false otherwise
-     * 
-     * This method returns the volatile running flag indicating server status.
-     * The flag is thread-safe and reflects the actual server state.
      */
     public boolean isRunning() {
         return isRunning;
@@ -110,37 +146,13 @@ public class PluginServer {
 
     /**
      * @return int The port number the server is configured to listen on
-     * 
-     * This method returns the port number used by the server.
-     * The port is set during construction and remains constant for the server's lifetime.
      */
     public int getPort() {
         return port;
     }
 
     /**
-     * @return void
-     * 
-     * This method registers all HTTP API endpoints with their route handlers.
-     * 1. It instantiates route handler classes, passing required dependencies:
-     *    - GeneralRoutes: Health checks and general endpoints
-     *    - ClassRoutes: Class navigation and analysis
-     *    - MethodRoutes: Method search and retrieval
-     *    - ResourceRoutes: Manifest and resource file access
-     *    - RefactoringRoutes: Code renaming operations
-     *    - DebugRoutes: Debugging information
-     *    - XrefsRoutes: Cross-reference analysis
-     * 2. It maps HTTP GET endpoints to handler methods organized by category:
-     *    - General: /health
-     *    - Classes: /current-class, /all-classes, /class-source, etc.
-     *    - Methods: /method-by-name, /search-method
-     *    - Xrefs: /xrefs-to-class, /xrefs-to-method, /xrefs-to-field
-     *    - Resources: /manifest, /strings, /list-all-resource-files-names
-     *    - Refactoring: /rename-class, /rename-method, /rename-field, /rename-package
-     *    - Debugging: /debug/stack-frames, /debug/variables, /debug/threads
-     * 
-     * All route handlers receive mainWindow and paginationUtils for accessing
-     * JADX API and providing consistent pagination across endpoints.
+     * Registers all HTTP API endpoints with their route handlers.
      */
     private void registerRoutes() {
         // Instantiate Route Controllers
@@ -169,11 +181,10 @@ public class PluginServer {
         app.get("/main-activity", classRoutes::handleMainActivity);
         app.get("/search-classes-by-keyword", classRoutes::handleSearchClassesByKeyword);
 
-
         // --- Methods ---
         app.get("/method-by-name", methodRoutes::handleMethodByName);
         app.get("/search-method", methodRoutes::handleSearchMethod);
-        
+
         // --- Xrefs ---
         app.get("/xrefs-to-class", xrefsRoutes::handleXrefsToClass);
         app.get("/xrefs-to-method", xrefsRoutes::handleXrefsToMethod);
@@ -195,7 +206,7 @@ public class PluginServer {
         // --- Debugging ---
         app.get("/debug/stack-frames", debugRoutes::handleGetStackFrames);
         app.get("/debug/variables", debugRoutes::handleGetVariables);
-        app.get("/debug/threads", debugRoutes::handleGetThreads);        
+        app.get("/debug/threads", debugRoutes::handleGetThreads);
     }
 
 }
