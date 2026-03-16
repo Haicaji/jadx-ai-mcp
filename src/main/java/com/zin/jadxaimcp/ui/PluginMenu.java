@@ -180,7 +180,7 @@ public class PluginMenu {
                     }
                 } else {
                     JOptionPane.showMessageDialog(mainWindow, "Port must be between 1024 and 65535",
-                            "Ivalid Port", JOptionPane.ERROR_MESSAGE);
+                            "Invalid Port", JOptionPane.ERROR_MESSAGE);
                 }
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(mainWindow, "Invalid number format",
@@ -196,7 +196,9 @@ public class PluginMenu {
      */
     private void showHostConfigDialog() {
         String input = JOptionPane.showInputDialog(mainWindow,
-                "Enter Server Host/IP:", plugin.getCurrentHost());
+            "Enter Server Host/IP:\n"
+                + "Security note: Non-localhost host may expose JADX data to your network.",
+            plugin.getCurrentHost());
 
         if (input != null) {
             String newHost = input.trim();
