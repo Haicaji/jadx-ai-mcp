@@ -29,7 +29,9 @@ import com.zin.jadxaimcp.server.PluginServer;
 public class JadxAIMCP implements JadxPlugin {
     public static final String PLUGIN_ID = "jadx-ai-mcp";
     private static final Logger logger = LoggerFactory.getLogger(JadxAIMCP.class);
+    private static final String PREF_KEY_HOST = "jadx_ai_mcp_host";
     private static final String PREF_KEY_PORT = "jadx_ai_mcp_port";
+    private static final String DEFAULT_HOST = "127.0.0.1";
     private static final int DEFAULT_PORT = 8650;
 
     // Keep track of the active plugin instance to handle multiple instantiations
@@ -37,6 +39,7 @@ public class JadxAIMCP implements JadxPlugin {
     private static JadxAIMCP activeInstance = null;
 
     // Config & State
+    private String currentHost = DEFAULT_HOST;
     private int currentPort = DEFAULT_PORT;
     private Preferences prefs;
     private ScheduledExecutorService scheduler;
@@ -81,6 +84,7 @@ public class JadxAIMCP implements JadxPlugin {
 
             // 1. Initialize Config
             prefs = Preferences.userNodeForPackage(JadxAIMCP.class);
+            currentHost = prefs.get(PREF_KEY_HOST, DEFAULT_HOST);
             currentPort = prefs.getInt(PREF_KEY_PORT, DEFAULT_PORT);
 
             // 2. Initialize UI
@@ -172,7 +176,7 @@ public class JadxAIMCP implements JadxPlugin {
         try {
             if (pluginServer != null)
                 pluginServer.stop();
-            pluginServer = new PluginServer(mainWindow, currentPort);
+            pluginServer = new PluginServer(mainWindow, currentHost, currentPort);
             pluginServer.start();
         } catch (Exception e) {
             logger.error("JADX-AI-MCP Plugin: Failed to start server: " + e.getMessage());
@@ -197,14 +201,14 @@ public class JadxAIMCP implements JadxPlugin {
      */
     public void restartServer() {
         new Thread(() -> {
-            logger.info("JADX-AI-MCP Plugin: Restarting server on port " + currentPort);
+            logger.info("JADX-AI-MCP Plugin: Restarting server on " + currentHost + ":" + currentPort);
             if (pluginServer != null)
                 pluginServer.stop();
             try {
                 Thread.sleep(1000); // Wait for port release
                 startServer();
                 SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(mainWindow,
-                        "Server restarted on port " + currentPort,
+                        "Server restarted on " + currentHost + ":" + currentPort,
                         "Server restarted.", JOptionPane.INFORMATION_MESSAGE));
             } catch (Exception e) {
                 logger.error("Failed to restart server", e);
@@ -249,6 +253,17 @@ public class JadxAIMCP implements JadxPlugin {
     }
 
     /**
+     * @param newHost The new host to bind for the plugin HTTP server
+     * @return void
+     *
+     *         Updates and persists server host configuration.
+     */
+    public void updateHost(String newHost) {
+        this.currentHost = newHost;
+        prefs.put(PREF_KEY_HOST, newHost);
+    }
+
+    /**
      * @return void
      * 
      *         This method resets the server port configuration to the default value
@@ -260,6 +275,22 @@ public class JadxAIMCP implements JadxPlugin {
      */
     public void resetToDefaultPort() {
         updatePort(DEFAULT_PORT);
+    }
+
+    /**
+     * @return void
+     *
+     *         Resets host configuration to default value (127.0.0.1).
+     */
+    public void resetToDefaultHost() {
+        updateHost(DEFAULT_HOST);
+    }
+
+    /**
+     * @return String The currently configured bind host
+     */
+    public String getCurrentHost() {
+        return currentHost;
     }
 
     /**

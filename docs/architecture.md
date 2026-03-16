@@ -72,7 +72,8 @@ SwingUtilities.invokeLater(() -> {
 ## 🔒 Security Model
 
 ### Network Security
-- **Localhost Binding**: Plugin binds ONLY to `127.0.0.1`. Remote access blocked.
+- **Default Localhost Binding**: Plugin defaults to `127.0.0.1` but can be configured to bind to a custom host/IP.
+- **Remote Deployment**: For VM/plugin + host/server setups, configure plugin host in UI and pass same host via `--jadx-host` in `jadx_mcp_server.py`.
 - **No Auth**: Relies on OS-level user isolation.
 
 ### Input Validation

@@ -430,16 +430,23 @@ OR
 uv run jadx_mcp_server.py --http --port 9999
 ```
 
-## 6. Custom port configuration for JADX AI MCP Plugin
+## 6. Custom host/port configuration for JADX AI MCP Plugin
 
 <img width="800" height="335" alt="image" src="https://github.com/user-attachments/assets/6243adc5-5be4-4e2d-aa16-bdaf78a28e36" />
 
 1. Configure Port: Configure the port on which the JADX AI MCP Plugin will listen on.
-2. Default Port: Revert back the changes and listen on default port.
-3. Restart Server: Force restart the JADX AI MCP Plugin server.
-4. Server Status: Check the status of JADX AI MCP Plugin server.
+2. Configure Host: Configure the host/IP on which the plugin server will bind.
+3. Default Port: Revert back the changes and listen on default port.
+4. Default Host: Revert back the host to default `127.0.0.1`.
+5. Restart Server: Force restart the JADX AI MCP Plugin server.
+6. Server Status: Check the status of JADX AI MCP Plugin server.
 
-To connect with JADX AI MCP Plugin running on custom port, the `--jadx-port` option will be used as shown in following:
+To connect with JADX AI MCP Plugin running on custom host/port, use `--jadx-host` and `--jadx-port`:
+```
+uv run jadx_mcp_server.py --jadx-host 192.168.56.101 --jadx-port 8652
+```
+
+For local-only setup, you can still keep default host and only change port:
 ```
 uv run jadx_mcp_server.py --jadx-port 8652
 ```
@@ -456,6 +463,8 @@ The MCP Configuration for above will be as follows for claude:
         "/path/to/jadx-mcp-server/",
         "run",
         "jadx_mcp_server.py",
+        "--jadx-host",
+        "192.168.56.101",
         "--jadx-port",
         "8652"
       ]
@@ -463,6 +472,8 @@ The MCP Configuration for above will be as follows for claude:
   }
 }
 ```
+
+Security note: binding plugin server to non-localhost host/IP exposes it to your network. Use trusted network and firewall rules.
 
 ## Give it a shot
 

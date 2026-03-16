@@ -16,6 +16,7 @@
 1. Navigate to the folder/directory where `jadx_mcp_server.py` is residing.
 2. Ensure that jadx-gui is running and you have completed the verification of plugin.
 3. Run the following command -> `uv run jadx_mcp_server.py --jadx-port <port>`, if there are no errors then connection between jadx_mcp_server and plugin is ok.
+4. If plugin and mcp server are running on different machines, use -> `uv run jadx_mcp_server.py --jadx-host <plugin_host_ip> --jadx-port <port>`
 
 <img width="1383" height="324" alt="image" src="https://github.com/user-attachments/assets/f488947f-4d5a-4f5e-ba3c-116813a973d7" />
 

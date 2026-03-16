@@ -18,7 +18,7 @@ public class GeneralRoutes {
     private final MainWindow mainWindow;
     private final PluginServer server;
 
-    public GeneralRoutes(MainWindow mainWindow, int port, PluginServer server) {
+    public GeneralRoutes(MainWindow mainWindow, PluginServer server) {
         this.mainWindow = mainWindow;
         this.server = server;
     }
@@ -40,11 +40,12 @@ public class GeneralRoutes {
         try {
             boolean isRunning = server.isRunning();
             String status = isRunning ? "Running" : "Stopped";
-            String url = isRunning ? "http://127.0.0.1:" + server.getPort() + "/" : "N/A";
+            String url = isRunning ? "http://" + server.getHost() + ":" + server.getPort() + "/" : "N/A";
 
             Map<String, String> result = new HashMap<>();
             result.put("status", status);
             result.put("url", url);
+            ctx.json(result);
 
             logger.debug("JADX AI MCP Plugin: GOT HEALTH PING");
         } catch (Exception e) {

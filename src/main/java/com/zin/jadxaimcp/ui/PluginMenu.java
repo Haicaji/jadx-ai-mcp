@@ -53,23 +53,36 @@ public class PluginMenu {
                 JMenuItem portItem = new JMenuItem("Configure Port...");
                 portItem.addActionListener(e -> showPortConfigDialog());
 
-                // 2. Default Port
+                // 2. Configure Host
+                JMenuItem hostItem = new JMenuItem("Configure Host...");
+                hostItem.addActionListener(e -> showHostConfigDialog());
+
+                // 3. Default Port
                 JMenuItem defaultPortItem = new JMenuItem("Default Port");
                 defaultPortItem.addActionListener(e -> {
                     plugin.resetToDefaultPort();
                     plugin.restartServer();
                 });
 
-                // 3. Restart Server
+                // 4. Default Host
+                JMenuItem defaultHostItem = new JMenuItem("Default Host");
+                defaultHostItem.addActionListener(e -> {
+                    plugin.resetToDefaultHost();
+                    plugin.restartServer();
+                });
+
+                // 5. Restart Server
                 JMenuItem restartItem = new JMenuItem("Restart Server");
                 restartItem.addActionListener(e -> plugin.restartServer());
 
-                // 4. Server Status
+                // 6. Server Status
                 JMenuItem statusItem = new JMenuItem("Server Status");
                 statusItem.addActionListener(e -> showServerStatus());
 
                 mcpMenu.add(portItem);
+                mcpMenu.add(hostItem);
                 mcpMenu.add(defaultPortItem);
+                mcpMenu.add(defaultHostItem);
                 mcpMenu.addSeparator();
                 mcpMenu.add(restartItem);
                 mcpMenu.add(statusItem);
@@ -178,11 +191,34 @@ public class PluginMenu {
 
     /**
      * @return void
+     *
+     *         This method displays a dialog for configuring the server host.
+     */
+    private void showHostConfigDialog() {
+        String input = JOptionPane.showInputDialog(mainWindow,
+                "Enter Server Host/IP:", plugin.getCurrentHost());
+
+        if (input != null) {
+            String newHost = input.trim();
+            if (newHost.isEmpty()) {
+                JOptionPane.showMessageDialog(mainWindow, "Host cannot be empty",
+                        "Invalid Host", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            if (!newHost.equals(plugin.getCurrentHost())) {
+                plugin.updateHost(newHost);
+                plugin.restartServer();
+            }
+        }
+    }
+
+    /**
+     * @return void
      * 
      *         This method displays the current server status in a dialog.
      *         1. It checks whether the server is currently running
      *         2. It retrieves the configured port number
-     *         3. It constructs the server URL if running (http://127.0.0.1:<port>/)
+    *         3. It constructs the server URL if running (http://<host>:<port>/)
      *         4. It displays a dialog showing:
      *         - Status (Running/Stopped)
      *         - Port number
@@ -193,10 +229,10 @@ public class PluginMenu {
     private void showServerStatus() {
         boolean running = plugin.isServerRunning();
         String status = running ? "Running" : "Stopped";
-        String url = running ? "http://127.0.0.1:" + plugin.getCurrentPort() + "/" : "N/A";
+        String url = running ? "http://" + plugin.getCurrentHost() + ":" + plugin.getCurrentPort() + "/" : "N/A";
 
         JOptionPane.showMessageDialog(mainWindow,
-                "Status " + status + "\nPort: " + plugin.getCurrentPort() + "\nURL: " + url,
+            "Status " + status + "\nHost: " + plugin.getCurrentHost() + "\nPort: " + plugin.getCurrentPort() + "\nURL: " + url,
                 "MCP Server Status", JOptionPane.INFORMATION_MESSAGE);
     }
 }

@@ -14,6 +14,7 @@ public class PluginServer {
     // JVM-wide key to store the ServerSocketChannel for cross-classloader shutdown
     private static final String JVM_SERVER_KEY = "jadx-ai-mcp-server-channel";
     private final MainWindow mainWindow;
+    private final String host;
     private final int port;
     private Javalin app;
     private final PaginationUtils paginationUtils;
@@ -21,10 +22,12 @@ public class PluginServer {
 
     /**
      * @param mainWindows - The main Jadx window context
+     * @param host        - The host/IP to bind
      * @param port        - The port to listen on
      */
-    public PluginServer(MainWindow mainWindow, int port) {
+    public PluginServer(MainWindow mainWindow, String host, int port) {
         this.mainWindow = mainWindow;
+        this.host = host;
         this.port = port;
         this.paginationUtils = new PaginationUtils();
     }
@@ -44,7 +47,7 @@ public class PluginServer {
             // Configure and start Javalin
             app = Javalin.create(config -> {
                 config.showJavalinBanner = false;
-            }).start(port);
+            }).start(host, port);
 
             // Extract and store the underlying ServerSocketChannel (JDK class) JVM-wide
             // so future classloaders can close it even if the old classloader is broken
@@ -58,7 +61,7 @@ public class PluginServer {
             // Log startup success and banner
             logger.info(JadxAIMCPBanner.banner);
             logger.info("// -------------------- JADX AI MCP PLUGIN -------------------- //");
-            logger.info("JADX AI MCP Plugin HTTP Server Started at http://127.0.0.1:" + port + "/");
+            logger.info("JADX AI MCP Plugin HTTP Server Started at http://" + host + ":" + port + "/");
 
         } catch (Exception e) {
             logger.error("JADX-AI-MCP Plugin Error: Could not start HTTP Server. Exception: " + e.getMessage(), e);
@@ -152,12 +155,19 @@ public class PluginServer {
     }
 
     /**
+     * @return String The configured host/IP the server is bound to
+     */
+    public String getHost() {
+        return host;
+    }
+
+    /**
      * Registers all HTTP API endpoints with their route handlers.
      */
     private void registerRoutes() {
         // Instantiate Route Controllers
         // Passing 'mainWindow' and 'paginationUtils' to them so they can do their work
-        GeneralRoutes generalRoutes = new GeneralRoutes(mainWindow, port, this);
+        GeneralRoutes generalRoutes = new GeneralRoutes(mainWindow, this);
         ClassRoutes classRoutes = new ClassRoutes(mainWindow, paginationUtils);
         MethodRoutes methodRoutes = new MethodRoutes(mainWindow, paginationUtils);
         ResourceRoutes resourceRoutes = new ResourceRoutes(mainWindow);
