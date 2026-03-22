@@ -26,14 +26,25 @@ jobs:
 
       - name: Install jadx-all into local Maven repo
         run: |
+          # Download jadx release and find usable jar
           curl -L "https://github.com/skylot/jadx/releases/download/v1.5.3/jadx-1.5.3.zip" -o jadx.zip
           unzip -q jadx.zip -d jadx-dist
+          echo "Available jars in distribution:"
+          find jadx-dist -name "*.jar" | sort
+
+          # Try to find jadx-all or fall back to merging all jadx jars
           JAR=$(find jadx-dist -name "jadx-all*.jar" | head -1)
           if [ -z "$JAR" ]; then
-            echo "jadx-all not found, listing available jars:"
-            find jadx-dist -name "*.jar"
-            exit 1
+            # No jadx-all jar found, create one by merging all jadx lib jars
+            mkdir -p merged-classes
+            for j in $(find jadx-dist/lib -name "*.jar"); do
+              unzip -qo "$j" -d merged-classes 2>/dev/null || true
+            done
+            jar cf jadx-all-1.5.3.jar -C merged-classes .
+            JAR="jadx-all-1.5.3.jar"
+            echo "Created merged jar: $JAR"
           fi
+
           echo "Installing: $JAR"
           mvn install:install-file \
             -Dfile="$JAR" \
