@@ -2,11 +2,12 @@ name: Build JAR
 
 on:
   push:
-    branches: [ jadx-ai ]
+    branches: [ jadx-ai, ci-build-action ]
   pull_request:
     branches: [ jadx-ai ]
   release:
     types: [ published ]
+  workflow_dispatch:
 
 jobs:
   build:
